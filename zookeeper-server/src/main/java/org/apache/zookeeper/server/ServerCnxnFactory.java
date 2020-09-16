@@ -234,6 +234,7 @@ public abstract class ServerCnxnFactory {
      * @throws IOException if jaas.conf is missing or there's an error in it.
      */
     protected void configureSaslLogin() throws IOException {
+        //从系统变量中获取zookeeper.sasl.serverconfig  默认是Server
         String serverSection = System.getProperty(ZooKeeperSaslServer.LOGIN_CONTEXT_NAME_KEY, ZooKeeperSaslServer.DEFAULT_LOGIN_CONTEXT_NAME);
 
         // Note that 'Configuration' here refers to javax.security.auth.login.Configuration.
@@ -251,6 +252,7 @@ public abstract class ServerCnxnFactory {
         // the user has required sasl by specifying a LOGIN_CONTEXT_NAME_KEY or a jaas file
         // we throw an exception otherwise we continue without authentication.
         if (entries == null) {
+            //如果没有获取到，则从系统变量中获取java.security.auth.login.config
             String jaasFile = System.getProperty(Environment.JAAS_CONF_KEY);
             String loginContextName = System.getProperty(ZooKeeperSaslServer.LOGIN_CONTEXT_NAME_KEY);
             if (securityException != null && (loginContextName != null || jaasFile != null)) {

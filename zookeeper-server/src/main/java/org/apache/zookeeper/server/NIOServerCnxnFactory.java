@@ -378,6 +378,7 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         public void run() {
             try {
                 while (!stopped) {
+                    //只要stopped为false 就会一直循环，这个值一开始是false 所有会走这里
                     try {
                         select();
                         processAcceptedConnections();
@@ -414,8 +415,9 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
 
         private void select() {
             try {
+                //nio  阻塞 监听客户端的请求
                 selector.select();
-
+                //下面都是属于nio的常规操作
                 Set<SelectionKey> selected = selector.selectedKeys();
                 ArrayList<SelectionKey> selectedList = new ArrayList<SelectionKey>(selected);
                 Collections.shuffle(selectedList);
@@ -425,10 +427,12 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
                     selected.remove(key);
 
                     if (!key.isValid()) {
+                        //通道验证没通过 就清除这个通道
                         cleanupSelectionKey(key);
                         continue;
                     }
                     if (key.isReadable() || key.isWritable()) {
+                        //如果通道 可读  或者 可写
                         handleIO(key);
                     } else {
                         LOG.warn("Unexpected ops in select {}", key.readyOps());
@@ -631,31 +635,41 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
 
     @Override
     public void configure(InetSocketAddress addr, int maxcc, int backlog, boolean secure) throws IOException {
+        //secure 是否是安全 就是https
         if (secure) {
+            //nio不提供https
             throw new UnsupportedOperationException("SSL isn't supported in NIOServerCnxn");
         }
+        //根据配置相关信息，则会去初始化服务器SASL
+        //这里没有配置，所以不会去初始化
         configureSaslLogin();
-
+        //获取maxClientCnxns
         maxClientCnxns = maxcc;
+        //从配置文件获取maxCnxns  初始化
         initMaxCnxns();
+        //zookeeper的session会话超时时间 默认10S
         sessionlessCnxnTimeout = Integer.getInteger(ZOOKEEPER_NIO_SESSIONLESS_CNXN_TIMEOUT, 10000);
         // We also use the sessionlessCnxnTimeout as expiring interval for
         // cnxnExpiryQueue. These don't need to be the same, but the expiring
         // interval passed into the ExpiryQueue() constructor below should be
         // less than or equal to the timeout.
+
         cnxnExpiryQueue = new ExpiryQueue<NIOServerCnxn>(sessionlessCnxnTimeout);
         expirerThread = new ConnectionExpirerThread();
 
         int numCores = Runtime.getRuntime().availableProcessors();
         // 32 cores sweet spot seems to be 4 selector threads
+        //线程数 根据当前系统 空闲的处理器数 进行numSelectorThreads的赋值
+        // numSelectorThreads = 当前系统 空闲的处理器数/2  最小是1
         numSelectorThreads = Integer.getInteger(
             ZOOKEEPER_NIO_NUM_SELECTOR_THREADS,
             Math.max((int) Math.sqrt((float) numCores / 2), 1));
         if (numSelectorThreads < 1) {
             throw new IOException("numSelectorThreads must be at least 1");
         }
-
+        //工人 线程数  = 当前系统 空闲的处理器数 * 2
         numWorkerThreads = Integer.getInteger(ZOOKEEPER_NIO_NUM_WORKER_THREADS, 2 * numCores);
+        //工人 线程关闭的超时时间  默认5000
         workerShutdownTimeoutMS = Long.getLong(ZOOKEEPER_NIO_SHUTDOWN_TIMEOUT, 5000);
 
         String logMsg = "Configuring NIO connection handler with "
@@ -669,14 +683,18 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
         }
 
         listenBacklog = backlog;
+        //开启 nio的监听
         this.ss = ServerSocketChannel.open();
+        // 启用套接字
         ss.socket().setReuseAddress(true);
         LOG.info("binding to port {}", addr);
+        //绑定 2181
         if (listenBacklog == -1) {
             ss.socket().bind(addr);
         } else {
             ss.socket().bind(addr, listenBacklog);
         }
+        //设置为 非阻塞
         ss.configureBlocking(false);
         acceptThread = new AcceptThread(ss, addr, selectorThreads);
     }
@@ -732,19 +750,24 @@ public class NIOServerCnxnFactory extends ServerCnxnFactory {
 
     @Override
     public void start() {
+        //将stopped 改为fasle
         stopped = false;
         if (workerPool == null) {
+            //如果还没初始化，就初始化  给workers添加一个固定大小的线程池
             workerPool = new WorkerService("NIOWorker", numWorkerThreads, false);
         }
         for (SelectorThread thread : selectorThreads) {
             if (thread.getState() == Thread.State.NEW) {
+                //如果线程是新建状态就启动任务，刚开始肯定是新建状态，所以执行
                 thread.start();
             }
         }
         // ensure thread is started once and only once
         if (acceptThread.getState() == Thread.State.NEW) {
+            //如果线程是新建状态就启动任务，刚开始肯定是新建状态，所以执行
             acceptThread.start();
         }
+        //这里没看到 这个任务的新建
         if (expirerThread.getState() == Thread.State.NEW) {
             expirerThread.start();
         }

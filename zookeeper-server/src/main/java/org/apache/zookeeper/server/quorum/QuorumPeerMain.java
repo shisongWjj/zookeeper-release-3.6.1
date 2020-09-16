@@ -121,10 +121,13 @@ public class QuorumPeerMain {
     protected void initializeAndRun(String[] args) throws ConfigException, IOException, AdminServerException {
         QuorumPeerConfig config = new QuorumPeerConfig();
         if (args.length == 1) {
+            //加载全局配置信息
+            //从配置文件中获取配置信息，并进行解析后，存放到QuorumPeerConfig对象中
+            //args[0] -> zoo.cfg 配置文件
             config.parse(args[0]);
         }
 
-        // Start and schedule the the purge task
+        // 开启一个任务进行清理任务
         DatadirCleanupManager purgeMgr = new DatadirCleanupManager(
             config.getDataDir(),
             config.getDataLogDir(),
@@ -132,6 +135,7 @@ public class QuorumPeerMain {
             config.getPurgeInterval());
         purgeMgr.start();
 
+        //根据之前的配置信息，来判断是集群启动还是单机启动
         if (args.length == 1 && config.isDistributed()) {
             runFromConfig(config);
         } else {
@@ -143,6 +147,7 @@ public class QuorumPeerMain {
 
     public void runFromConfig(QuorumPeerConfig config) throws IOException, AdminServerException {
         try {
+            //注册jmx 的bean 就是可以将信息在  jmx查询
             ManagedUtil.registerLog4jMBeans();
         } catch (JMException e) {
             LOG.warn("Unable to register log4j JMX control", e);
@@ -163,15 +168,24 @@ public class QuorumPeerMain {
             ServerCnxnFactory secureCnxnFactory = null;
 
             if (config.getClientPortAddress() != null) {
+                //根据配置zookeeper.serverCnxnFactory来反射生成ServerCnxnFactory对象
+                //默认是NIOServerCnxnFactory(java原生的nio)
+                //cnxnFactory = NIOServerCnxnFactory
+                //2181的监听
                 cnxnFactory = ServerCnxnFactory.createFactory();
                 cnxnFactory.configure(config.getClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), false);
             }
 
             if (config.getSecureClientPortAddress() != null) {
+                //根据配置 zookeeper.serverCnxnFactory来反射生成ServerCnxnFactory对象
+                //默认是NIOServerCnxnFactory(java原生的nio)
+                //secureCnxnFactory = NIOServerCnxnFactory
+                //https的监听
                 secureCnxnFactory = ServerCnxnFactory.createFactory();
                 secureCnxnFactory.configure(config.getSecureClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), true);
             }
 
+            //初始化了quorumPeer
             quorumPeer = getQuorumPeer();
             quorumPeer.setTxnFactory(new FileTxnSnapLog(config.getDataLogDir(), config.getDataDir()));
             quorumPeer.enableLocalSessions(config.areLocalSessionsEnabled());
@@ -226,6 +240,7 @@ public class QuorumPeerMain {
 
             quorumPeer.start();
             ZKAuditProvider.addZKStartStopAuditLog();
+            //线程阻塞住了
             quorumPeer.join();
         } catch (InterruptedException e) {
             // warn, but generally this is ok

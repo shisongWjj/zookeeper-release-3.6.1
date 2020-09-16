@@ -1069,10 +1069,13 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
     @Override
     public synchronized void start() {
+        //判断当前所有服务的myid 是否包含了当前服务节点的myid 如果没有就抛出异常
         if (!getView().containsKey(myid)) {
             throw new RuntimeException("My id " + myid + " not in the peer list");
         }
+        //从原有的持久化文件中，加载数据
         loadDataBase();
+        //启动ServerCnxn，就是一开始启动2181 监听的那个对象
         startServerCnxnFactory();
         try {
             adminServer.start();
@@ -1080,8 +1083,10 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             LOG.warn("Problem starting AdminServer", e);
             System.out.println(e);
         }
+        //进行leader选举
         startLeaderElection();
         startJvmPauseMonitor();
+        //执行run 方法
         super.start();
     }
 
@@ -2009,9 +2014,11 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     }
 
     private void startServerCnxnFactory() {
+        //判断cnxnFactory 不为空 就开始启动
         if (cnxnFactory != null) {
             cnxnFactory.start();
         }
+        //判断secureCnxnFactory 不为空 就开始启动
         if (secureCnxnFactory != null) {
             secureCnxnFactory.start();
         }
